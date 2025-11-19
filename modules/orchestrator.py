@@ -87,12 +87,14 @@ class OMIGeminiOrchestrator:
             try:
                 memory_content = self._format_analysis_for_memory(analysis, cleaned_result)
 
+                # OMI API requires both 'text' and 'memories' fields
                 memories_response = self.omi_client.create_memories(
+                    text=memory_content,  # Required by OMI API
                     memories=[{
                         "content": memory_content,
                         "tags": ["gemini_analysis", "psychological_insight"]
                     }],
-                    text_source="integration",
+                    text_source="other",  # Changed from "integration" (not valid)
                     text_source_spec="gemini_analyzer"
                 )
 

@@ -113,8 +113,8 @@ class OMIClient:
 
         Args:
             memories: List of explicit memory objects with "content" and optional "tags"
-            text: Alternative: text from which memories will be extracted
-            text_source: Source type
+            text: Text content (required by OMI API, even with explicit memories)
+            text_source: Source type (must be "email", "social_post", or "other")
             text_source_spec: Additional source specification
 
         Returns:
@@ -130,12 +130,16 @@ class OMIClient:
         if text_source_spec:
             data["text_source_spec"] = text_source_spec
 
+        # OMI API requires 'text' field even when passing explicit memories
+        if text is not None:
+            data["text"] = text
+
         if memories is not None:
             data["memories"] = memories
-        elif text is not None:
-            data["text"] = text
-        else:
-            raise ValueError("Either 'memories' or 'text' must be provided")
+
+        # At least text must be provided (OMI API requirement)
+        if "text" not in data:
+            raise ValueError("'text' field is required by OMI API")
 
         try:
             response = self.session.post(url, params=params, json=data)
