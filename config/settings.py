@@ -68,6 +68,16 @@ class WebhookConfig:
     PORT = int(os.getenv("WEBHOOK_PORT", "8000"))
     BASE_URL = os.getenv("WEBHOOK_BASE_URL", f"http://localhost:{PORT}")
 
+# Security Settings
+class SecurityConfig:
+    # Webhook signature validation (production only)
+    ENABLE_WEBHOOK_VALIDATION = os.getenv("ENABLE_WEBHOOK_VALIDATION", "false").lower() == "true"
+    WEBHOOK_SECRET = os.getenv("WEBHOOK_SECRET", OMIConfig.APP_SECRET)  # Use OMI secret by default
+
+    # Rate limiting
+    ENABLE_RATE_LIMITING = os.getenv("ENABLE_RATE_LIMITING", "true").lower() == "true"
+    RATE_LIMIT_PER_MINUTE = int(os.getenv("RATE_LIMIT_PER_MINUTE", "60"))
+
 # Application Settings
 class AppSettings:
     DEBUG = os.getenv("DEBUG", "false").lower() == "true"
@@ -83,6 +93,7 @@ __all__ = [
     "GeminiConfig",
     "GoogleWorkspaceConfig",
     "WebhookConfig",
+    "SecurityConfig",
     "AppSettings",
     "BASE_DIR"
 ]

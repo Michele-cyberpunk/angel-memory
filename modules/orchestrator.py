@@ -272,6 +272,29 @@ This analysis is generated automatically and should not replace professional eva
 
         return msg
 
+    def process_audio_stream(self, audio_bytes: bytes, sample_rate: int, uid: str) -> Dict[str, Any]:
+        """
+        Process raw audio stream from OMI device
+
+        Args:
+            audio_bytes: Raw PCM audio bytes
+            sample_rate: Audio sample rate
+            uid: User identifier
+
+        Returns:
+            Processing result with buffer info
+        """
+        logger.info(f"Processing audio stream for user {uid}, {len(audio_bytes)} bytes at {sample_rate}Hz")
+
+        # For now, we acknowledge receipt
+        # Future: Could buffer audio for offline transcription or analysis
+        return {
+            "buffered": True,
+            "buffer_size": len(audio_bytes),
+            "sample_rate": sample_rate,
+            "note": "Audio stream received - OMI handles transcription"
+        }
+
     def close(self):
         """Cleanup resources"""
         self.omi_client.close()

@@ -9,7 +9,8 @@ import logging
 from datetime import datetime
 
 from modules.orchestrator import OMIGeminiOrchestrator
-from config.settings import AppSettings, WebhookConfig
+from modules.security import WebhookValidator, RateLimiter
+from config.settings import AppSettings, WebhookConfig, SecurityConfig
 
 # Configure logging
 logging.basicConfig(
@@ -23,17 +24,29 @@ logging.basicConfig(
 
 logger = logging.getLogger(__name__)
 
-# Global orchestrator instance
+# Global instances
 orchestrator: OMIGeminiOrchestrator = None
+webhook_validator: WebhookValidator = None
+rate_limiter: RateLimiter = None
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Lifespan context manager for FastAPI"""
-    global orchestrator
+    global orchestrator, webhook_validator, rate_limiter
 
     # Startup
     logger.info("Starting OMI-Gemini Webhook Server")
     orchestrator = OMIGeminiOrchestrator()
+
+    # Initialize security components
+    if SecurityConfig.ENABLE_WEBHOOK_VALIDATION:
+        webhook_validator = WebhookValidator(SecurityConfig.WEBHOOK_SECRET)
+        logger.info("Webhook signature validation enabled")
+
+    if SecurityConfig.ENABLE_RATE_LIMITING:
+        rate_limiter = RateLimiter(SecurityConfig.RATE_LIMIT_PER_MINUTE)
+        logger.info(f"Rate limiting enabled: {SecurityConfig.RATE_LIMIT_PER_MINUTE} req/min")
+
     logger.info(f"Server ready on {WebhookConfig.HOST}:{WebhookConfig.PORT}")
 
     yield
@@ -69,6 +82,39 @@ async def health_check():
         "timestamp": datetime.utcnow().isoformat()
     }
 
+async def _check_rate_limit(client_id: str):
+    """Check rate limit for client"""
+    if rate_limiter and SecurityConfig.ENABLE_RATE_LIMITING:
+        if not rate_limiter.is_allowed(client_id):
+            raise HTTPException(
+                status_code=429,
+                detail="Rate limit exceeded. Please try again later."
+            )
+
+async def _validate_webhook_signature(request: Request):
+    """Validate webhook signature if enabled"""
+    if webhook_validator and SecurityConfig.ENABLE_WEBHOOK_VALIDATION:
+        signature = request.headers.get("X-OMI-Signature")
+        timestamp = request.headers.get("X-OMI-Timestamp")
+
+        if not signature:
+            logger.warning("Missing webhook signature")
+            raise HTTPException(status_code=401, detail="Missing signature")
+
+        # Read body for validation
+        body = await request.body()
+
+        # Validate timestamp if present
+        if timestamp and not webhook_validator.is_timestamp_valid(timestamp):
+            raise HTTPException(status_code=401, detail="Request timestamp too old")
+
+        # Validate signature
+        if not webhook_validator.validate_signature(body, signature, timestamp):
+            raise HTTPException(status_code=401, detail="Invalid signature")
+
+        return body
+    return None
+
 @app.post("/webhook/memory")
 async def memory_creation_webhook(request: Request):
     """
@@ -84,8 +130,19 @@ async def memory_creation_webhook(request: Request):
         if not uid:
             raise HTTPException(status_code=400, detail="Missing 'uid' query parameter")
 
-        # Parse memory data
-        memory_data = await request.json()
+        # Check rate limit
+        client_id = uid or request.client.host
+        await _check_rate_limit(client_id)
+
+        # Validate signature (optional, reads body if enabled)
+        validated_body = await _validate_webhook_signature(request)
+
+        # Parse memory data (use validated body if available)
+        if validated_body:
+            import json
+            memory_data = json.loads(validated_body)
+        else:
+            memory_data = await request.json()
 
         logger.info(f"Received memory webhook for user {uid}, memory ID: {memory_data.get('id')}")
 
@@ -166,15 +223,17 @@ async def audio_streaming_webhook(request: Request):
 
         logger.info(f"Received audio stream - sample_rate: {sample_rate}, bytes: {len(audio_bytes)}")
 
-        # TODO: Implement audio processing if needed
-        # For now, just acknowledge receipt
+        # Process audio stream (save to buffer for potential future transcription)
+        result = orchestrator.process_audio_stream(audio_bytes, int(sample_rate), uid)
 
         return JSONResponse(
             status_code=200,
             content={
                 "status": "success",
                 "bytes_received": len(audio_bytes),
-                "sample_rate": sample_rate
+                "sample_rate": sample_rate,
+                "buffered": result.get("buffered", False),
+                "buffer_size": result.get("buffer_size", 0)
             }
         )
 
