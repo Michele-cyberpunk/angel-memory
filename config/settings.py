@@ -66,7 +66,8 @@ class GoogleWorkspaceConfig:
 # Webhook Server Configuration
 class WebhookConfig:
     HOST = os.getenv("WEBHOOK_HOST", "0.0.0.0")
-    PORT = int(os.getenv("WEBHOOK_PORT", "8000"))
+    # Prioritize PORT (standard for PaaS) then WEBHOOK_PORT, default to 8000
+    PORT = int(os.getenv("PORT", os.getenv("WEBHOOK_PORT", "8000")))
     BASE_URL = os.getenv("WEBHOOK_BASE_URL", f"http://localhost:{PORT}")
 
 # Security Settings
