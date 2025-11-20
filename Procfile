@@ -1,1 +1,1 @@
-web: python3 -m uvicorn webhook_server:app --host 0.0.0.0 --port $PORT
+web: python3 -m uvicorn webhook_server:app --host 0.0.0.0 --port $PORT 2>&1

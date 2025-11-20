@@ -74,7 +74,7 @@ class MemoryEmbedder:
 
     def embed_batch(self, texts: List[str], task_type: str = "SEMANTIC_SIMILARITY") -> List[Optional[np.ndarray]]:
         """
-        Generate embeddings for multiple texts
+        Generate embeddings for multiple texts using batch API
 
         Args:
             texts: List of texts to embed
@@ -83,20 +83,40 @@ class MemoryEmbedder:
         Returns:
             List of embedding vectors (None for failed embeddings)
         """
+        if not texts:
+            return []
+
         logger.info(f"Batch embedding {len(texts)} texts")
 
-        embeddings = []
-        for i, text in enumerate(texts):
-            embedding = self.embed_text(text, task_type)
-            embeddings.append(embedding)
+        try:
+            result = genai.embed_content(
+                model=self.EMBEDDING_MODEL,
+                content=texts,
+                task_type=task_type,
+                output_dimensionality=self.dimension
+            )
 
-            if (i + 1) % 10 == 0:
-                logger.info(f"Embedded {i + 1}/{len(texts)} texts")
+            # result['embedding'] contains a list of embeddings for batch request
+            if 'embedding' in result:
+                embeddings = [
+                    np.array(emb, dtype=np.float32)
+                    for emb in result['embedding']
+                ]
+                logger.info(f"Batch embedding complete: {len(embeddings)}/{len(texts)} successful")
+                return embeddings
 
-        successful = sum(1 for e in embeddings if e is not None)
-        logger.info(f"Batch embedding complete: {successful}/{len(texts)} successful")
+            logger.warning("No embeddings returned in batch response")
+            return [None] * len(texts)
 
-        return embeddings
+        except Exception as e:
+            logger.error(f"Batch embedding failed: {str(e)}")
+            # Fallback to sequential if batch fails
+            logger.info("Falling back to sequential embedding")
+            embeddings = []
+            for i, text in enumerate(texts):
+                embedding = self.embed_text(text, task_type)
+                embeddings.append(embedding)
+            return embeddings
 
     def embed_memory(self, memory_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """
