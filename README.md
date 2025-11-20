@@ -38,7 +38,7 @@ nano .env
 Credenziali necessarie:
 - ✅ OMI_APP_ID, OMI_APP_SECRET, OMI_USER_UID (già configurate)
 - ✅ GEMINI_API_KEY (già configurato)
-- ⚠️ Google Workspace OAuth2 (da configurare)
+- ⚠️ Google Workspace OAuth2 (da configurare usare il file presente)
 
 ### 3. Setup Google Workspace (Opzionale)
 
@@ -50,7 +50,7 @@ Per automazione Gmail/Calendar/Slides:
    - Gmail API
    - Google Calendar API
    - Google Slides API
-4. Crea credenziali OAuth 2.0 (Desktop app)
+4. Crea credenziali OAuth 2.0 (Desktop app, ma in questo caso non va bene dato che sarà tutto lato railwey o firebase o cloud run a discrezione del LLm che sta programmando e sta analizzando questo scritto)
 5. Scarica `client_secret.json` in `config/`
 
 ### 4. Avvio Server
@@ -88,8 +88,8 @@ Triggered automaticamente quando OMI app crea una memoria.
 
 **Processo**:
 1. Estrae trascritto dalla memoria
-2. Pulisce con Gemini (fallback chain)
-3. Analisi psicologica (ADHD, ansia, tono emotivo)
+2. Pulisce il testo ricevuto con Gemini (fallback chain)
+3. Analisi psicologica (ADHD, ansia, tono emotivo, identificazione di bias e rionoscimento realistico della situazione (da implementare))
 4. Salva analisi come nuova memoria in OMI
 5. (Opzionale) Crea bozza email se necessario
 6. Invia notifica all'app OMI
