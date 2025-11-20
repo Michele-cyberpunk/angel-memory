@@ -2,11 +2,12 @@
 Example test script for OMI-Gemini Integration
 """
 import sys
+import os
 import logging
 from datetime import datetime, timezone
 
 # Add modules to path
-sys.path.insert(0, '/home/ai/omi-gemini-integration')
+sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))
 
 from modules.omi_client import OMIClient
 from modules.transcript_processor import TranscriptProcessor

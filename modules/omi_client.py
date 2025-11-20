@@ -53,8 +53,8 @@ class OMIClient:
             response = self.session.get(url, params=params)
             response.raise_for_status()
             data = response.json()
-            logger.info(f"Retrieved {len(data)} conversations from OMI")
-            return data
+            logger.info(f"Retrieved {len(data.get('conversations', []))} conversations from OMI")
+            return data.get('conversations', [])
         except requests.exceptions.RequestException as e:
             logger.error(f"Failed to read conversations: {e}")
             raise
@@ -173,8 +173,8 @@ class OMIClient:
             response = self.session.get(url, params=params)
             response.raise_for_status()
             data = response.json()
-            logger.info(f"Retrieved {len(data)} memories from OMI")
-            return data
+            logger.info(f"Retrieved {len(data.get('memories', []))} memories from OMI")
+            return data.get('memories', [])
         except requests.exceptions.RequestException as e:
             logger.error(f"Failed to read memories: {e}")
             raise

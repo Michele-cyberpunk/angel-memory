@@ -21,6 +21,7 @@ class OMIConfig:
     DEV_KEY = os.getenv("OMI_DEV_KEY")
     BASE_URL = os.getenv("OMI_BASE_URL", "https://api.omi.me")
     USER_UID = os.getenv("OMI_USER_UID")
+    MCP_SERVER_URL = os.getenv("MCP_SERVER_URL")
 
     @classmethod
     def validate(cls):

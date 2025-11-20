@@ -21,3 +21,6 @@ aiofiles==23.2.1
 
 # For memory embeddings and vector store
 numpy>=1.24.0
+
+# MCP
+mcp>=1.0.0

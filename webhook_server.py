@@ -54,7 +54,7 @@ async def lifespan(app: FastAPI):
     # Shutdown
     logger.info("Shutting down server")
     if orchestrator:
-        orchestrator.close()
+        await orchestrator.close()
 
 # Create FastAPI app
 app = FastAPI(
@@ -147,7 +147,7 @@ async def memory_creation_webhook(request: Request):
         logger.info(f"Received memory webhook for user {uid}, memory ID: {memory_data.get('id')}")
 
         # Process with orchestrator
-        result = orchestrator.process_memory_webhook(memory_data, uid)
+        result = await orchestrator.process_memory_webhook(memory_data, uid)
 
         # Return response
         status_code = 200 if result["success"] else 500
@@ -188,7 +188,7 @@ async def realtime_transcript_webhook(request: Request):
         logger.info(f"Received realtime transcript - session: {session_id}, segments: {len(segments)}")
 
         # Process
-        result = orchestrator.process_realtime_transcript(segments, session_id, uid)
+        result = await orchestrator.process_realtime_transcript(segments, session_id, uid)
 
         return JSONResponse(
             status_code=200,
@@ -249,7 +249,7 @@ async def manual_analysis(limit: int = 5):
     Query params: limit (number of conversations to analyze)
     """
     try:
-        results = orchestrator.manual_conversation_analysis(limit=limit)
+        results = await orchestrator.manual_conversation_analysis(limit=limit)
 
         return JSONResponse(
             status_code=200,
