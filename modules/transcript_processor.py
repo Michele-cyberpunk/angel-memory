@@ -2,7 +2,8 @@
 Transcript Processor with Gemini AI
 Handles transcript cleaning and structuring with fallback chain
 """
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 from typing import Optional, Dict, Any
 from config.settings import GeminiConfig
 import logging
@@ -15,7 +16,7 @@ class TranscriptProcessor:
 
     def __init__(self):
         GeminiConfig.validate()
-        genai.configure(api_key=GeminiConfig.API_KEY)
+        self.client = genai.Client(api_key=GeminiConfig.API_KEY)
 
         self.primary_model = GeminiConfig.PRIMARY_MODEL
         self.fallback_model = GeminiConfig.FALLBACK_MODEL
@@ -86,20 +87,19 @@ class TranscriptProcessor:
         prompt = self._build_cleaning_prompt(text, context)
 
         try:
-            model = genai.GenerativeModel(model_name)
-
             # Configure generation parameters
-            generation_config = {
-                "temperature": 0.3,  # Lower temperature for more consistent cleaning
-                "top_p": 0.8,
-                "top_k": 40,
-                "max_output_tokens": 4096,
-            }
+            config = types.GenerateContentConfig(
+                temperature=0.3,  # Lower temperature for more consistent cleaning
+                top_p=0.8,
+                top_k=40,
+                max_output_tokens=4096,
+            )
 
             start_time = time.time()
-            response = model.generate_content(
-                prompt,
-                generation_config=generation_config
+            response = self.client.models.generate_content(
+                model=model_name,
+                contents=prompt,
+                config=config
             )
             elapsed = time.time() - start_time
 

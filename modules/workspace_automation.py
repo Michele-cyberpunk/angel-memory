@@ -15,7 +15,7 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
-import google.generativeai as genai
+from google import genai
 from config.settings import GoogleWorkspaceConfig, GeminiConfig
 import logging
 
@@ -32,8 +32,8 @@ class WorkspaceAutomation:
 
         # Initialize Gemini for decision-making
         GeminiConfig.validate()
-        genai.configure(api_key=GeminiConfig.API_KEY)
-        self.gemini_model = genai.GenerativeModel(GeminiConfig.PRIMARY_MODEL)
+        self.client = genai.Client(api_key=GeminiConfig.API_KEY)
+        self.gemini_model_name = GeminiConfig.PRIMARY_MODEL
 
         logger.info("Initialized WorkspaceAutomation")
 
@@ -116,7 +116,10 @@ Respond with ONLY "YES" or "NO" and a brief one-sentence reason.
 Format: YES|NO: <reason>"""
 
         try:
-            response = self.gemini_model.generate_content(prompt)
+            response = self.client.models.generate_content(
+                model=self.gemini_model_name,
+                contents=prompt
+            )
             decision_text = response.text.strip().upper()
 
             should_create = decision_text.startswith("YES")
@@ -204,7 +207,10 @@ BODY:
 <email body>"""
 
         try:
-            response = self.gemini_model.generate_content(prompt)
+            response = self.client.models.generate_content(
+                model=self.gemini_model_name,
+                contents=prompt
+            )
             text = response.text.strip()
 
             # Parse subject and body

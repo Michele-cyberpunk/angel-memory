@@ -2,7 +2,8 @@
 Gemini Embedding System for Semantic Memory Storage
 Uses gemini-embedding-001 (state-of-the-art model)
 """
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 from typing import List, Dict, Any, Optional
 from config.settings import GeminiConfig
 import logging
@@ -24,7 +25,7 @@ class MemoryEmbedder:
             dimension: Output dimension (128-3072, recommended: 768, 1536, 3072)
         """
         GeminiConfig.validate()
-        genai.configure(api_key=GeminiConfig.API_KEY)
+        self.client = genai.Client(api_key=GeminiConfig.API_KEY)
 
         if not (128 <= dimension <= 3072):
             raise ValueError(f"Dimension must be between 128 and 3072, got {dimension}")
@@ -38,35 +39,31 @@ class MemoryEmbedder:
 
         Args:
             text: Text to embed (max 2048 tokens)
-            task_type: Task optimization type:
-                - SEMANTIC_SIMILARITY (default)
-                - RETRIEVAL_DOCUMENT
-                - RETRIEVAL_QUERY
-                - CLASSIFICATION
-                - CLUSTERING
-                - QUESTION_ANSWERING
-                - FACT_VERIFICATION
-                - CODE_RETRIEVAL_QUERY
-
-        Returns:
-            Embedding vector as numpy array, or None if failed
+            task_type: Task optimization type
         """
         if not text or not text.strip():
             logger.warning("Empty text provided for embedding")
             return None
 
         try:
-            result = genai.embed_content(
+            result = self.client.models.embed_content(
                 model=self.EMBEDDING_MODEL,
-                content=text,
-                task_type=task_type,
-                output_dimensionality=self.dimension
+                contents=text,
+                config=types.EmbedContentConfig(
+                    task_type=task_type,
+                    output_dimensionality=self.dimension
+                )
             )
 
-            embedding = np.array(result['embedding'], dtype=np.float32)
-            logger.debug(f"Generated embedding with shape {embedding.shape}")
-
-            return embedding
+            # New SDK returns object with .embeddings attribute which is a list of Embedding objects
+            # For single content, we expect one embedding
+            if result.embeddings:
+                embedding = np.array(result.embeddings[0].values, dtype=np.float32)
+                logger.debug(f"Generated embedding with shape {embedding.shape}")
+                return embedding
+            
+            logger.warning("No embeddings returned")
+            return None
 
         except Exception as e:
             logger.error(f"Failed to generate embedding: {str(e)}")
@@ -79,9 +76,6 @@ class MemoryEmbedder:
         Args:
             texts: List of texts to embed
             task_type: Task optimization type
-
-        Returns:
-            List of embedding vectors (None for failed embeddings)
         """
         if not texts:
             return []
@@ -89,18 +83,19 @@ class MemoryEmbedder:
         logger.info(f"Batch embedding {len(texts)} texts")
 
         try:
-            result = genai.embed_content(
+            result = self.client.models.embed_content(
                 model=self.EMBEDDING_MODEL,
-                content=texts,
-                task_type=task_type,
-                output_dimensionality=self.dimension
+                contents=texts,
+                config=types.EmbedContentConfig(
+                    task_type=task_type,
+                    output_dimensionality=self.dimension
+                )
             )
 
-            # result['embedding'] contains a list of embeddings for batch request
-            if 'embedding' in result:
+            if result.embeddings:
                 embeddings = [
-                    np.array(emb, dtype=np.float32)
-                    for emb in result['embedding']
+                    np.array(emb.values, dtype=np.float32)
+                    for emb in result.embeddings
                 ]
                 logger.info(f"Batch embedding complete: {len(embeddings)}/{len(texts)} successful")
                 return embeddings
@@ -150,13 +145,6 @@ class MemoryEmbedder:
     def cosine_similarity(vec1: np.ndarray, vec2: np.ndarray) -> float:
         """
         Calculate cosine similarity between two vectors
-
-        Args:
-            vec1: First vector
-            vec2: Second vector
-
-        Returns:
-            Similarity score (0-1, higher is more similar)
         """
         if vec1 is None or vec2 is None:
             return 0.0
@@ -175,14 +163,6 @@ class MemoryEmbedder:
                     top_k: int = 5) -> List[tuple[int, float]]:
         """
         Find most similar embeddings to query
-
-        Args:
-            query_embedding: Query vector
-            candidate_embeddings: List of candidate vectors
-            top_k: Number of top results to return
-
-        Returns:
-            List of (index, similarity_score) tuples, sorted by similarity (highest first)
         """
         similarities = []
 

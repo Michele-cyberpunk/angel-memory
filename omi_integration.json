@@ -1,0 +1,33 @@
+{
+  "id": "omi-gemini-integration",
+  "name": "Gemini Psychological Analyzer",
+  "description": "Analyzes OMI memories using Google Gemini to provide psychological insights, ADHD/Anxiety screening, and automated workspace actions.",
+  "author": "You",
+  "version": "1.0.0",
+  "integration_type": "webhook",
+  "capabilities": [
+    "memory_creation_trigger",
+    "psychological_analysis",
+    "email_automation"
+  ],
+  "endpoints": {
+    "memory_webhook": {
+      "url": "https://YOUR-RAILWAY-APP-URL.up.railway.app/webhook/memory",
+      "method": "POST",
+      "description": "Triggers analysis when a new memory is created.",
+      "query_params": ["uid"]
+    },
+    "manual_analysis": {
+      "url": "https://YOUR-RAILWAY-APP-URL.up.railway.app/api/analyze",
+      "method": "POST",
+      "description": "Manually trigger analysis for a transcript."
+    }
+  },
+  "setup_instructions": {
+    "step_1": "Deploy this repo to Railway.",
+    "step_2": "Go to OMI Developer Portal -> Create App.",
+    "step_3": "Select 'Memory Creation Trigger'.",
+    "step_4": "Set Endpoint URL to your Railway URL + /webhook/memory.",
+    "step_5": "Add 'uid' as a query parameter."
+  }
+}

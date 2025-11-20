@@ -2,7 +2,9 @@
 Psychological Analyzer using Gemini AI
 Analyzes transcripts for ADHD indicators, anxiety patterns, and emotional tone
 """
-import google.generativeai as genai
+
+from google import genai
+from google.genai import types
 from typing import Dict, Any, Optional
 from config.settings import GeminiConfig
 import logging
@@ -16,12 +18,11 @@ class PsychologicalAnalyzer:
 
     def __init__(self):
         GeminiConfig.validate()
-        genai.configure(api_key=GeminiConfig.API_KEY)
+        self.client = genai.Client(api_key=GeminiConfig.API_KEY)
 
         # Use Pro model for complex psychological analysis
         self.model_name = GeminiConfig.FALLBACK_MODEL
-        self.model = genai.GenerativeModel(self.model_name)
-
+        
         logger.info(f"Initialized PsychologicalAnalyzer with model: {self.model_name}")
 
     def analyze(self, transcript: str, include_details: bool = True) -> Dict[str, Any]:
@@ -42,16 +43,17 @@ class PsychologicalAnalyzer:
         prompt = self._build_analysis_prompt(transcript, include_details)
 
         try:
-            generation_config = {
-                "temperature": 0.4,
-                "top_p": 0.9,
-                "top_k": 40,
-                "max_output_tokens": 2048,
-            }
+            config = types.GenerateContentConfig(
+                temperature=0.4,
+                top_p=0.9,
+                top_k=40,
+                max_output_tokens=2048,
+            )
 
-            response = self.model.generate_content(
-                prompt,
-                generation_config=generation_config
+            response = self.client.models.generate_content(
+                model=self.model_name,
+                contents=prompt,
+                config=config
             )
 
             if not response or not response.text:

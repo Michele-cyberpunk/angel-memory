@@ -32,6 +32,19 @@ Per far funzionare tutto senza il tuo PC, creeremo **due servizi** all'interno d
 
 ---
 
+## Step 3: Configura l'App su OMI (Developer Portal)
+
+1.  Vai su [OMI Developer Portal](https://omi.me/developer).
+2.  Clicca **Create App** -> **Memory Creation Trigger**.
+3.  Compila i dettagli:
+    *   **Name**: Gemini Analyzer
+    *   **Description**: Analisi psicologica automatica.
+4.  **Endpoint URL**: Incolla il dominio della tua App Python su Railway (Servizio B) seguito da `/webhook/memory`.
+    *   Esempio: `https://python-app-production.up.railway.app/webhook/memory`
+5.  Assicurati che il parametro `uid` sia incluso (OMI lo aggiunge spesso automaticamente o devi specificarlo nella config).
+
+---
+
 ## Configurazione Variabili Completa
 
 ```
