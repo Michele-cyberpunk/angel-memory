@@ -183,8 +183,7 @@ def test_full_pipeline():
     }
 
     print("\nProcessing mock memory webhook...")
-    import asyncio
-    result = asyncio.run(orchestrator.process_memory_webhook(mock_memory, "test_user_123"))
+    result = orchestrator.process_memory_webhook(mock_memory, "test_user_123")
 
     print(f"\nPipeline Result:")
     print(f"Success: {result['success']}")
