@@ -202,7 +202,17 @@ class OMIGeminiOrchestrator:
             # Based on test output: get_conversations: Retrieve a list of conversation metadata.
             
             # We need to handle the format returned by MCP
-            conversations = conversations_data if isinstance(conversations_data, list) else []
+            conversations = []
+            if isinstance(conversations_data, list):
+                conversations = conversations_data
+            elif isinstance(conversations_data, dict):
+                # Try to find list in common keys
+                if "conversations" in conversations_data and isinstance(conversations_data["conversations"], list):
+                    conversations = conversations_data["conversations"]
+                elif "data" in conversations_data and isinstance(conversations_data["data"], list):
+                    conversations = conversations_data["data"]
+                elif "items" in conversations_data and isinstance(conversations_data["items"], list):
+                    conversations = conversations_data["items"]
             
             # Limit locally since MCP tool might not support limit param
             conversations = conversations[:limit]
