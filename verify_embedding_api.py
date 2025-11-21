@@ -1,5 +1,5 @@
 
-from google import genai
+import google.genai as genai
 from google.genai import types
 import os
 from dotenv import load_dotenv
@@ -28,18 +28,19 @@ try:
         model=model,
         contents=texts,
         config=types.EmbedContentConfig(
-            task_type="SEMANTIC_SIMILARITY"
+            task_type="SEMANTIC_SIMILARITY",
+            output_dimensionality=768
         )
     )
-    
+
     print(f"Result type: {type(result)}")
-    
+
     if result.embeddings:
         print(f"Embeddings found: {len(result.embeddings)}")
         first_emb = result.embeddings[0]
         print(f"First embedding values length: {len(first_emb.values)}")
     else:
         print("No embeddings returned.")
-        
+
 except Exception as e:
     print(f"Test 1 failed: {e}")

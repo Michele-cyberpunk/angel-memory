@@ -9,7 +9,11 @@ from typing import List, Dict, Any, Optional
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 from mcp.client.sse import sse_client
-from config.settings import OMIConfig
+from config.settings import OMIConfig, AppSettings
+
+# Setup logging if not already configured
+if not logging.getLogger().hasHandlers():
+    AppSettings.setup_logging()
 
 logger = logging.getLogger(__name__)
 
@@ -101,6 +105,8 @@ class MCPIntegration:
             
         try:
             logger.info(f"Calling MCP tool: {tool_name}")
+            if not self.session:
+                 raise RuntimeError("MCP session not initialized")
             result = await self.session.call_tool(tool_name, arguments)
             
             # Parse result content

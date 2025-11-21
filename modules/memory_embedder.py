@@ -2,12 +2,17 @@
 Gemini Embedding System for Semantic Memory Storage
 Uses gemini-embedding-001 (state-of-the-art model)
 """
-from google import genai
+import google.genai as genai
 from google.genai import types
 from typing import List, Dict, Any, Optional
-from config.settings import GeminiConfig
+from config.settings import GeminiConfig, AppSettings
+from modules.api_utils import with_gemini_rate_limit_and_retry
 import logging
 import numpy as np
+
+# Setup logging if not already configured
+if not logging.getLogger().hasHandlers():
+    AppSettings.setup_logging()
 
 logger = logging.getLogger(__name__)
 
@@ -24,14 +29,51 @@ class MemoryEmbedder:
         Args:
             dimension: Output dimension (128-3072, recommended: 768, 1536, 3072)
         """
-        GeminiConfig.validate()
-        self.client = genai.Client(api_key=GeminiConfig.API_KEY)
+        try:
+            GeminiConfig.validate()
+            self.client = genai.Client(api_key=GeminiConfig.API_KEY)
+            logger.debug("Gemini client initialized for embeddings")
+        except Exception as e:
+            logger.error("Failed to initialize Gemini client", exc_info=True, extra={
+                "error": str(e),
+                "error_type": type(e).__name__
+            })
+            raise
 
         if not (128 <= dimension <= 3072):
+            logger.error("Invalid dimension parameter", extra={
+                "dimension": dimension,
+                "valid_range": "128-3072"
+            })
             raise ValueError(f"Dimension must be between 128 and 3072, got {dimension}")
 
         self.dimension = dimension
-        logger.info(f"Initialized MemoryEmbedder with {self.EMBEDDING_MODEL}, dimension={dimension}")
+        logger.info("MemoryEmbedder initialized successfully", extra={
+            "model": self.EMBEDDING_MODEL,
+            "dimension": dimension
+        })
+
+    @with_gemini_rate_limit_and_retry
+    def _call_embedding_api(self, text: str, task_type: str) -> Any:
+        """
+        Call Gemini embedding API with rate limiting and retry logic
+
+        Args:
+            text: Text to embed
+            task_type: Task optimization type
+
+        Returns:
+            API response object
+        """
+        result = self.client.models.embed_content(
+            model=self.EMBEDDING_MODEL,
+            contents=text,
+            config=types.EmbedContentConfig(
+                task_type=task_type,
+                output_dimensionality=self.dimension
+            )
+        )
+        return result
 
     def embed_text(self, text: str, task_type: str = "SEMANTIC_SIMILARITY") -> Optional[np.ndarray]:
         """
@@ -42,32 +84,68 @@ class MemoryEmbedder:
             task_type: Task optimization type
         """
         if not text or not text.strip():
-            logger.warning("Empty text provided for embedding")
+            logger.warning("Empty text provided for embedding", extra={
+                "text_length": len(text) if text else 0,
+                "task_type": task_type
+            })
             return None
 
         try:
-            result = self.client.models.embed_content(
-                model=self.EMBEDDING_MODEL,
-                contents=text,
-                config=types.EmbedContentConfig(
-                    task_type=task_type,
-                    output_dimensionality=self.dimension
-                )
-            )
+            logger.debug("Generating embedding", extra={
+                "text_length": len(text),
+                "task_type": task_type,
+                "model": self.EMBEDDING_MODEL,
+                "dimension": self.dimension
+            })
+
+            result = self._call_embedding_api(text, task_type)
 
             # New SDK returns object with .embeddings attribute which is a list of Embedding objects
             # For single content, we expect one embedding
             if result.embeddings:
                 embedding = np.array(result.embeddings[0].values, dtype=np.float32)
-                logger.debug(f"Generated embedding with shape {embedding.shape}")
+                logger.debug("Embedding generated successfully", extra={
+                    "shape": embedding.shape,
+                    "task_type": task_type
+                })
                 return embedding
-            
-            logger.warning("No embeddings returned")
+
+            logger.warning("No embeddings returned from API", extra={
+                "task_type": task_type,
+                "text_preview": text[:100] + "..." if len(text) > 100 else text
+            })
             return None
 
         except Exception as e:
-            logger.error(f"Failed to generate embedding: {str(e)}")
+            logger.error("Failed to generate embedding", exc_info=True, extra={
+                "error": str(e),
+                "error_type": type(e).__name__,
+                "task_type": task_type,
+                "text_length": len(text)
+            })
             return None
+
+    @with_gemini_rate_limit_and_retry
+    def _call_batch_embedding_api(self, texts: List[str], task_type: str) -> Any:
+        """
+        Call Gemini batch embedding API with rate limiting and retry logic
+
+        Args:
+            texts: List of texts to embed
+            task_type: Task optimization type
+
+        Returns:
+            API response object
+        """
+        result = self.client.models.embed_content(
+            model=self.EMBEDDING_MODEL,
+            contents=texts,
+            config=types.EmbedContentConfig(
+                task_type=task_type,
+                output_dimensionality=self.dimension
+            )
+        )
+        return result
 
     def embed_batch(self, texts: List[str], task_type: str = "SEMANTIC_SIMILARITY") -> List[Optional[np.ndarray]]:
         """
@@ -83,14 +161,7 @@ class MemoryEmbedder:
         logger.info(f"Batch embedding {len(texts)} texts")
 
         try:
-            result = self.client.models.embed_content(
-                model=self.EMBEDDING_MODEL,
-                contents=texts,
-                config=types.EmbedContentConfig(
-                    task_type=task_type,
-                    output_dimensionality=self.dimension
-                )
-            )
+            result = self._call_batch_embedding_api(texts, task_type)
 
             if result.embeddings:
                 embeddings = [
@@ -98,7 +169,7 @@ class MemoryEmbedder:
                     for emb in result.embeddings
                 ]
                 logger.info(f"Batch embedding complete: {len(embeddings)}/{len(texts)} successful")
-                return embeddings
+                return list(embeddings)
 
             logger.warning("No embeddings returned in batch response")
             return [None] * len(texts)
@@ -107,11 +178,18 @@ class MemoryEmbedder:
             logger.error(f"Batch embedding failed: {str(e)}")
             # Fallback to sequential if batch fails
             logger.info("Falling back to sequential embedding")
-            embeddings = []
+            fallback_embeddings: List[Optional[np.ndarray]] = []
             for i, text in enumerate(texts):
                 embedding = self.embed_text(text, task_type)
-                embeddings.append(embedding)
-            return embeddings
+                fallback_embeddings.append(embedding)
+            
+            # Filter out None values for return, or handle as needed
+            # Assuming callers expect valid embeddings or we should filter
+            valid_embeddings: List[Optional[np.ndarray]] = [e for e in fallback_embeddings if e is not None]
+            if len(valid_embeddings) != len(texts):
+                 logger.warning(f"Sequential embedding partial failure: {len(valid_embeddings)}/{len(texts)} successful")
+            
+            return valid_embeddings
 
     def embed_memory(self, memory_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """

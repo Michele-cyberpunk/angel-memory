@@ -5,8 +5,13 @@ Handles communication with OMI Import API and Notifications
 import requests
 from typing import List, Dict, Any, Optional
 from datetime import datetime
-from config.settings import OMIConfig
+from config.settings import OMIConfig, AppSettings
+from modules.api_utils import with_omi_retry
 import logging
+
+# Setup logging if not already configured
+if not logging.getLogger().hasHandlers():
+    AppSettings.setup_logging()
 
 logger = logging.getLogger(__name__)
 
@@ -26,8 +31,13 @@ class OMIClient:
             "Content-Type": "application/json"
         })
 
+    @with_omi_retry
+    def _get_conversations_request(self, url: str, params: Dict[str, Any]) -> requests.Response:
+        """Make HTTP GET request for conversations with retry logic"""
+        return self.session.get(url, params=params)
+
     def read_conversations(self, limit: int = 100, offset: int = 0,
-                          include_discarded: bool = False) -> List[Dict[str, Any]]:
+                           include_discarded: bool = False) -> List[Dict[str, Any]]:
         """
         Read conversations from OMI
 
@@ -49,20 +59,21 @@ class OMIClient:
         if include_discarded:
             params["include_discarded"] = "true"
 
-        try:
-            response = self.session.get(url, params=params)
-            response.raise_for_status()
-            data = response.json()
-            logger.info(f"Retrieved {len(data.get('conversations', []))} conversations from OMI")
-            return data.get('conversations', [])
-        except requests.exceptions.RequestException as e:
-            logger.error(f"Failed to read conversations: {e}")
-            raise
+        response = self._get_conversations_request(url, params)
+        response.raise_for_status()
+        data = response.json()
+        logger.info(f"Retrieved {len(data.get('conversations', []))} conversations from OMI")
+        return data.get('conversations', [])
+
+    @with_omi_retry
+    def _post_conversation_request(self, url: str, params: Dict[str, Any], data: Dict[str, Any]) -> requests.Response:
+        """Make HTTP POST request for conversation creation with retry logic"""
+        return self.session.post(url, params=params, json=data)
 
     def create_conversation(self, text: str, started_at: str, finished_at: str,
-                           language: str = "en", text_source: str = "other",
-                           text_source_spec: Optional[str] = None,
-                           geolocation: Optional[Dict[str, float]] = None) -> Dict[str, Any]:
+                            language: str = "en", text_source: str = "other",
+                            text_source_spec: Optional[str] = None,
+                            geolocation: Optional[Dict[str, float]] = None) -> Dict[str, Any]:
         """
         Create a new conversation in OMI
 
@@ -81,7 +92,7 @@ class OMIClient:
         url = f"{self.base_url}/v2/integrations/{self.app_id}/user/conversations"
         params = {"uid": self.user_uid}
 
-        data = {
+        data: Dict[str, Any] = {
             "text": text,
             "started_at": started_at,
             "finished_at": finished_at,
@@ -94,20 +105,21 @@ class OMIClient:
         if geolocation:
             data["geolocation"] = geolocation
 
-        try:
-            response = self.session.post(url, params=params, json=data)
-            response.raise_for_status()
-            result = response.json()
-            logger.info(f"Created conversation in OMI: {result.get('id', 'unknown')}")
-            return result
-        except requests.exceptions.RequestException as e:
-            logger.error(f"Failed to create conversation: {e}")
-            raise
+        response = self._post_conversation_request(url, params, data)
+        response.raise_for_status()
+        result = response.json()
+        logger.info(f"Created conversation in OMI: {result.get('id', 'unknown')}")
+        return result
+
+    @with_omi_retry
+    def _post_memories_request(self, url: str, params: Dict[str, Any], data: Dict[str, Any]) -> requests.Response:
+        """Make HTTP POST request for memory creation with retry logic"""
+        return self.session.post(url, params=params, json=data)
 
     def create_memories(self, memories: Optional[List[Dict[str, Any]]] = None,
-                       text: Optional[str] = None,
-                       text_source: str = "other",
-                       text_source_spec: Optional[str] = None) -> Dict[str, Any]:
+                        text: Optional[str] = None,
+                        text_source: str = "other",
+                        text_source_spec: Optional[str] = None) -> Dict[str, Any]:
         """
         Create memories in OMI
 
@@ -123,7 +135,7 @@ class OMIClient:
         url = f"{self.base_url}/v2/integrations/{self.app_id}/user/memories"
         params = {"uid": self.user_uid}
 
-        data = {
+        data: Dict[str, Any] = {
             "text_source": text_source
         }
 
@@ -141,15 +153,16 @@ class OMIClient:
         if "text" not in data:
             raise ValueError("'text' field is required by OMI API")
 
-        try:
-            response = self.session.post(url, params=params, json=data)
-            response.raise_for_status()
-            result = response.json()
-            logger.info(f"Created {len(result.get('memories', []))} memories in OMI")
-            return result
-        except requests.exceptions.RequestException as e:
-            logger.error(f"Failed to create memories: {e}")
-            raise
+        response = self._post_memories_request(url, params, data)
+        response.raise_for_status()
+        result = response.json()
+        logger.info(f"Created {len(result.get('memories', []))} memories in OMI")
+        return result
+
+    @with_omi_retry
+    def _get_memories_request(self, url: str, params: Dict[str, Any]) -> requests.Response:
+        """Make HTTP GET request for memories with retry logic"""
+        return self.session.get(url, params=params)
 
     def read_memories(self, limit: int = 100, offset: int = 0) -> List[Dict[str, Any]]:
         """
@@ -169,15 +182,16 @@ class OMIClient:
             "offset": offset
         }
 
-        try:
-            response = self.session.get(url, params=params)
-            response.raise_for_status()
-            data = response.json()
-            logger.info(f"Retrieved {len(data.get('memories', []))} memories from OMI")
-            return data.get('memories', [])
-        except requests.exceptions.RequestException as e:
-            logger.error(f"Failed to read memories: {e}")
-            raise
+        response = self._get_memories_request(url, params)
+        response.raise_for_status()
+        data = response.json()
+        logger.info(f"Retrieved {len(data.get('memories', []))} memories from OMI")
+        return data.get('memories', [])
+
+    @with_omi_retry
+    def _post_notification_request(self, url: str, params: Dict[str, Any]) -> requests.Response:
+        """Make HTTP POST request for notifications with retry logic"""
+        return self.session.post(url, params=params, headers={"Content-Length": "0"})
 
     def send_notification(self, message: str, user_uid: Optional[str] = None) -> bool:
         """
@@ -198,10 +212,7 @@ class OMIClient:
         }
 
         try:
-            # Notifications API uses POST with empty body and message in query params
-            response = self.session.post(url, params=params, headers={
-                "Content-Length": "0"
-            })
+            response = self._post_notification_request(url, params)
             response.raise_for_status()
             logger.info(f"Sent notification to user {uid}")
             return True

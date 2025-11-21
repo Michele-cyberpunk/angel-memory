@@ -1,94 +1,157 @@
 """
 Vector Memory Store with Semantic Search
 Stores memories with embeddings for efficient retrieval
+Enhanced with SQLite database storage and compression
 """
 import json
+import sqlite3
+import zlib
 import numpy as np
 from typing import List, Dict, Any, Optional
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timezone
 import logging
 from .memory_embedder import MemoryEmbedder
+from config.settings import AppSettings
+
+# Setup logging if not already configured
+if not logging.getLogger().hasHandlers():
+    AppSettings.setup_logging()
 
 logger = logging.getLogger(__name__)
+
+# Compression threshold: compress content larger than 1KB
+COMPRESSION_THRESHOLD = 1024
+
+# Database schema
+CREATE_MEMORIES_TABLE = """
+CREATE TABLE IF NOT EXISTS memories (
+    id TEXT PRIMARY KEY,
+    content TEXT NOT NULL,
+    metadata TEXT,
+    created_at TEXT NOT NULL,
+    compressed INTEGER DEFAULT 0
+)
+"""
+
+CREATE_EMBEDDINGS_TABLE = """
+CREATE TABLE IF NOT EXISTS embeddings (
+    memory_id TEXT PRIMARY KEY,
+    embedding BLOB NOT NULL,
+    FOREIGN KEY (memory_id) REFERENCES memories (id) ON DELETE CASCADE
+)
+"""
 
 class MemoryStore:
     """
     Persistent vector store for memories with semantic search
 
     Storage format:
-    - memories.json: Memory metadata + content
-    - embeddings.npy: Numpy array of all embeddings
+    - SQLite database with memories and embeddings tables
+    - Automatic compression for large transcripts (>1KB)
+    - Data integrity with transactions
     """
 
-    def __init__(self, storage_dir: Path, embedding_dimension: int = 768):
+    def __init__(self, db_path: str, embedding_dimension: int = 768):
         """
-        Initialize memory store
+        Initialize memory store with SQLite database
 
         Args:
-            storage_dir: Directory to store memories and embeddings
+            db_path: Path to SQLite database file
             embedding_dimension: Dimension for embeddings (128-3072)
         """
-        self.storage_dir = Path(storage_dir)
-        self.storage_dir.mkdir(parents=True, exist_ok=True)
-
-        self.memories_file = self.storage_dir / "memories.json"
-        self.embeddings_file = self.storage_dir / "embeddings.npy"
-
+        self.db_path = db_path
         self.embedder = MemoryEmbedder(dimension=embedding_dimension)
         self.dimension = embedding_dimension
 
-        # Load existing data
-        self.memories: List[Dict[str, Any]] = []
-        self.embeddings: np.ndarray = np.array([])
+        # Initialize database
+        self._init_database()
 
-        self._load()
+        # Cache for faster access (loaded on demand)
+        self._memories_cache: Optional[List[Dict[str, Any]]] = None
+        self._embeddings_cache: Optional[np.ndarray] = None
 
-        logger.info(f"MemoryStore initialized with {len(self.memories)} memories at {storage_dir}")
+        logger.info(f"MemoryStore initialized with database at {db_path}")
 
-    def _load(self):
-        """Load memories and embeddings from disk"""
-        try:
-            if self.memories_file.exists():
-                with open(self.memories_file, 'r', encoding='utf-8') as f:
-                    self.memories = json.load(f)
-                logger.info(f"Loaded {len(self.memories)} memories from disk")
+    def _init_database(self):
+        """Initialize database tables"""
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute(CREATE_MEMORIES_TABLE)
+            conn.execute(CREATE_EMBEDDINGS_TABLE)
+            conn.commit()
+        logger.info("Database tables initialized")
 
-            if self.embeddings_file.exists():
-                self.embeddings = np.load(str(self.embeddings_file))
-                logger.info(f"Loaded embeddings with shape {self.embeddings.shape}")
+    def _compress_content(self, content: str) -> tuple[str, bool]:
+        """Compress content if it exceeds threshold"""
+        if len(content.encode('utf-8')) > COMPRESSION_THRESHOLD:
+            compressed = zlib.compress(content.encode('utf-8'))
+            return compressed.hex(), True
+        return content, False
 
-            # Verify consistency
-            if len(self.memories) != len(self.embeddings):
-                logger.warning(f"Mismatch: {len(self.memories)} memories vs {len(self.embeddings)} embeddings")
-                # Truncate to match
-                min_len = min(len(self.memories), len(self.embeddings))
-                self.memories = self.memories[:min_len]
-                self.embeddings = self.embeddings[:min_len]
+    def _decompress_content(self, content: str, compressed: bool) -> str:
+        """Decompress content if it was compressed"""
+        if compressed:
+            return zlib.decompress(bytes.fromhex(content)).decode('utf-8')
+        return content
 
-        except Exception as e:
-            logger.error(f"Failed to load from disk: {str(e)}")
-            self.memories = []
-            self.embeddings = np.array([])
+    def _load_memories_cache(self):
+        """Load memories into cache for faster access"""
+        if self._memories_cache is not None:
+            return
 
-    def _save(self):
-        """Save memories and embeddings to disk"""
-        try:
-            # Save memories as JSON
-            with open(self.memories_file, 'w', encoding='utf-8') as f:
-                json.dump(self.memories, f, indent=2, ensure_ascii=False, default=str)
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.execute("""
+                SELECT id, content, metadata, created_at, compressed
+                FROM memories ORDER BY created_at DESC
+            """)
+            rows = cursor.fetchall()
 
-            # Save embeddings as numpy array
-            if len(self.embeddings) > 0:
-                np.save(str(self.embeddings_file), self.embeddings)
+        self._memories_cache = []
+        for row in rows:
+            memory_id, content, metadata, created_at, compressed = row
+            content = self._decompress_content(content, compressed)
+            metadata = json.loads(metadata) if metadata else {}
+            self._memories_cache.append({
+                "id": memory_id,
+                "content": content,
+                "metadata": metadata,
+                "created_at": created_at,
+                "embedding_dimension": self.dimension
+            })
 
-            logger.info(f"Saved {len(self.memories)} memories to disk")
+    def _load_embeddings_cache(self):
+        """Load embeddings into cache for faster access"""
+        if self._embeddings_cache is not None:
+            return
 
-        except Exception as e:
-            logger.error(f"Failed to save to disk: {str(e)}")
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.execute("""
+                SELECT embedding FROM embeddings
+                ORDER BY (SELECT created_at FROM memories WHERE id = memory_id) DESC
+            """)
+            rows = cursor.fetchall()
+
+        if rows:
+            embeddings = []
+            for row in rows:
+                embedding_bytes = row[0]
+                embedding = np.frombuffer(embedding_bytes, dtype=np.float32)
+                embeddings.append(embedding)
+            self._embeddings_cache = np.vstack(embeddings)
+        else:
+            self._embeddings_cache = np.array([])
+
+    def _invalidate_cache(self):
+        """Invalidate caches when data changes"""
+        self._memories_cache = None
+        self._embeddings_cache = None
+
+    # Legacy file-based loading removed - now using database
+
+    # Legacy file-based saving removed - now using database transactions
 
     def add_memory(self, content: str, metadata: Optional[Dict[str, Any]] = None,
-                  memory_id: Optional[str] = None) -> bool:
+                   memory_id: Optional[str] = None) -> bool:
         """
         Add a new memory with automatic embedding generation
 
@@ -111,31 +174,50 @@ class MemoryStore:
             logger.error("Failed to generate embedding for memory")
             return False
 
-        # Create memory object
-        memory = {
-            "id": memory_id or f"mem_{datetime.utcnow().timestamp()}",
-            "content": content,
-            "metadata": metadata or {},
-            "created_at": datetime.utcnow().isoformat(),
-            "embedding_dimension": self.dimension
-        }
+        # Compress content if needed
+        compressed_content, is_compressed = self._compress_content(content)
 
-        # Add to store
-        self.memories.append(memory)
+        # Create memory data
+        memory_id = memory_id or f"mem_{datetime.now(timezone.utc).timestamp()}"
+        created_at = datetime.now(timezone.utc).isoformat()
+        metadata_json = json.dumps(metadata or {})
 
-        # Add embedding
-        if len(self.embeddings) == 0:
-            self.embeddings = embedding.reshape(1, -1)
-        else:
-            self.embeddings = np.vstack([self.embeddings, embedding])
+        # Convert embedding to bytes
+        embedding_bytes = embedding.astype(np.float32).tobytes()
 
-        # Save to disk
-        self._save()
+        # Insert into database with transaction
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                conn.execute("BEGIN TRANSACTION")
 
-        logger.info(f"Added memory {memory['id']}, total: {len(self.memories)}")
-        return True
+                # Insert memory
+                conn.execute("""
+                    INSERT INTO memories (id, content, metadata, created_at, compressed)
+                    VALUES (?, ?, ?, ?, ?)
+                """, (memory_id, compressed_content, metadata_json, created_at, int(is_compressed)))
 
-    def add_batch(self, memories_data: List[Dict[str, str]]) -> int:
+                # Insert embedding
+                conn.execute("""
+                    INSERT INTO embeddings (memory_id, embedding)
+                    VALUES (?, ?)
+                """, (memory_id, embedding_bytes))
+
+                conn.commit()
+
+            # Invalidate cache
+            self._invalidate_cache()
+
+            logger.info(f"Added memory {memory_id}")
+            return True
+
+        except sqlite3.IntegrityError as e:
+            logger.error(f"Memory ID {memory_id} already exists: {e}")
+            return False
+        except Exception as e:
+            logger.error(f"Failed to add memory: {e}")
+            return False
+
+    def add_batch(self, memories_data: List[Dict[str, Any]]) -> int:
         """
         Add multiple memories at once
 
@@ -149,9 +231,16 @@ class MemoryStore:
 
         success_count = 0
         for mem_data in memories_data:
+            metadata = mem_data.get("metadata")
+            if isinstance(metadata, str):
+                try:
+                    metadata = json.loads(metadata)
+                except json.JSONDecodeError:
+                    metadata = {}
+            
             success = self.add_memory(
                 content=mem_data.get("content", ""),
-                metadata=mem_data.get("metadata"),
+                metadata=metadata,
                 memory_id=mem_data.get("id")
             )
             if success:
@@ -172,7 +261,11 @@ class MemoryStore:
         Returns:
             List of memories with similarity scores, sorted by relevance
         """
-        if len(self.memories) == 0:
+        # Load memories and embeddings if not cached
+        self._load_memories_cache()
+        self._load_embeddings_cache()
+
+        if self._memories_cache is None or len(self._memories_cache) == 0:
             logger.warning("Memory store is empty")
             return []
 
@@ -183,10 +276,13 @@ class MemoryStore:
             logger.error("Failed to generate query embedding")
             return []
 
+        if self._embeddings_cache is None:
+            return []
+
         # Find similar
         results = self.embedder.find_similar(
             query_embedding,
-            list(self.embeddings),
+            list(self._embeddings_cache),
             top_k=top_k
         )
 
@@ -194,7 +290,7 @@ class MemoryStore:
         search_results = []
         for idx, similarity in results:
             if similarity >= min_similarity:
-                memory = self.memories[idx].copy()
+                memory = self._memories_cache[idx].copy()
                 memory["similarity_score"] = similarity
                 search_results.append(memory)
 
@@ -203,9 +299,24 @@ class MemoryStore:
 
     def get_by_id(self, memory_id: str) -> Optional[Dict[str, Any]]:
         """Get memory by ID"""
-        for memory in self.memories:
-            if memory.get("id") == memory_id:
-                return memory
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.execute("""
+                SELECT id, content, metadata, created_at, compressed
+                FROM memories WHERE id = ?
+            """, (memory_id,))
+            row = cursor.fetchone()
+
+        if row:
+            memory_id, content, metadata, created_at, compressed = row
+            content = self._decompress_content(content, compressed)
+            metadata = json.loads(metadata) if metadata else {}
+            return {
+                "id": memory_id,
+                "content": content,
+                "metadata": metadata,
+                "created_at": created_at,
+                "embedding_dimension": self.dimension
+            }
         return None
 
     def get_all(self, limit: Optional[int] = None) -> List[Dict[str, Any]]:
@@ -218,83 +329,157 @@ class MemoryStore:
         Returns:
             List of memories
         """
-        memories = sorted(
-            self.memories,
-            key=lambda x: x.get("created_at", ""),
-            reverse=True
-        )
+        # Use cache if available
+        self._load_memories_cache()
+        if self._memories_cache is not None:
+            memories = self._memories_cache.copy()
+            if limit:
+                memories = memories[:limit]
+            return memories
 
-        if limit:
-            memories = memories[:limit]
+        # Fallback to direct query
+        with sqlite3.connect(self.db_path) as conn:
+            query = """
+                SELECT id, content, metadata, created_at, compressed
+                FROM memories ORDER BY created_at DESC
+            """
+            if limit:
+                query += f" LIMIT {limit}"
+
+            cursor = conn.execute(query)
+            rows = cursor.fetchall()
+
+        memories = []
+        for row in rows:
+            memory_id, content, metadata, created_at, compressed = row
+            content = self._decompress_content(content, compressed)
+            metadata = json.loads(metadata) if metadata else {}
+            memories.append({
+                "id": memory_id,
+                "content": content,
+                "metadata": metadata,
+                "created_at": created_at,
+                "embedding_dimension": self.dimension
+            })
 
         return memories
 
     def delete_by_id(self, memory_id: str) -> bool:
         """Delete memory by ID"""
-        for i, memory in enumerate(self.memories):
-            if memory.get("id") == memory_id:
-                # Remove from memories
-                self.memories.pop(i)
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                conn.execute("BEGIN TRANSACTION")
 
-                # Remove embedding
-                self.embeddings = np.delete(self.embeddings, i, axis=0)
+                # Check if memory exists
+                cursor = conn.execute("SELECT id FROM memories WHERE id = ?", (memory_id,))
+                if not cursor.fetchone():
+                    logger.warning(f"Memory {memory_id} not found")
+                    return False
 
-                # Save
-                self._save()
+                # Delete embedding first (due to foreign key)
+                conn.execute("DELETE FROM embeddings WHERE memory_id = ?", (memory_id,))
 
-                logger.info(f"Deleted memory {memory_id}")
-                return True
+                # Delete memory
+                conn.execute("DELETE FROM memories WHERE id = ?", (memory_id,))
 
-        logger.warning(f"Memory {memory_id} not found")
-        return False
+                conn.commit()
+
+            # Invalidate cache
+            self._invalidate_cache()
+
+            logger.info(f"Deleted memory {memory_id}")
+            return True
+
+        except Exception as e:
+            logger.error(f"Failed to delete memory {memory_id}: {e}")
+            return False
 
     def get_stats(self) -> Dict[str, Any]:
         """Get statistics about memory store"""
+        with sqlite3.connect(self.db_path) as conn:
+            # Get total count
+            cursor = conn.execute("SELECT COUNT(*) FROM memories")
+            total_memories = cursor.fetchone()[0]
+
+            # Get oldest and newest
+            cursor = conn.execute("""
+                SELECT MIN(created_at), MAX(created_at) FROM memories
+            """)
+            oldest, newest = cursor.fetchone()
+
+            # Get storage size
+            cursor = conn.execute("""
+                SELECT
+                    SUM(LENGTH(content)) + SUM(LENGTH(metadata)) + SUM(LENGTH(embedding))
+                FROM memories m LEFT JOIN embeddings e ON m.id = e.memory_id
+            """)
+            total_bytes = cursor.fetchone()[0] or 0
+
+        storage_size_mb = round(total_bytes / (1024 * 1024), 2)
+
         return {
-            "total_memories": len(self.memories),
+            "total_memories": total_memories,
             "embedding_dimension": self.dimension,
             "embedding_model": self.embedder.EMBEDDING_MODEL,
-            "storage_size_mb": self._get_storage_size_mb(),
-            "oldest_memory": self.memories[0].get("created_at") if self.memories else None,
-            "newest_memory": self.memories[-1].get("created_at") if self.memories else None
+            "storage_size_mb": storage_size_mb,
+            "oldest_memory": oldest,
+            "newest_memory": newest
         }
 
-    def _get_storage_size_mb(self) -> float:
-        """Calculate total storage size in MB"""
-        total_bytes = 0
-
-        if self.memories_file.exists():
-            total_bytes += self.memories_file.stat().st_size
-
-        if self.embeddings_file.exists():
-            total_bytes += self.embeddings_file.stat().st_size
-
-        return round(total_bytes / (1024 * 1024), 2)
+    # Legacy storage size calculation removed - now using database stats
 
     def rebuild_index(self):
         """
         Rebuild embeddings for all existing memories
         Useful if embedding model or dimension changes
         """
-        logger.info(f"Rebuilding embeddings for {len(self.memories)} memories")
+        with sqlite3.connect(self.db_path) as conn:
+            # Get all memories
+            cursor = conn.execute("""
+                SELECT id, content, compressed FROM memories ORDER BY created_at
+            """)
+            memories = cursor.fetchall()
 
-        new_embeddings = []
+        if not memories:
+            logger.info("No memories to rebuild")
+            return
 
-        for i, memory in enumerate(self.memories):
-            content = memory.get("content", "")
-            embedding = self.embedder.embed_text(content, task_type="RETRIEVAL_DOCUMENT")
+        logger.info(f"Rebuilding embeddings for {len(memories)} memories")
 
-            if embedding is not None:
-                new_embeddings.append(embedding)
-            else:
-                logger.warning(f"Failed to rebuild embedding for memory {i}")
-                # Use zero vector as placeholder
-                new_embeddings.append(np.zeros(self.dimension, dtype=np.float32))
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                conn.execute("BEGIN TRANSACTION")
 
-            if (i + 1) % 10 == 0:
-                logger.info(f"Rebuilt {i + 1}/{len(self.memories)} embeddings")
+                for i, (memory_id, content, compressed) in enumerate(memories):
+                    # Decompress if needed
+                    content = self._decompress_content(content, compressed)
 
-        if new_embeddings:
-            self.embeddings = np.vstack(new_embeddings)
-            self._save()
+                    # Generate new embedding
+                    embedding = self.embedder.embed_text(content, task_type="RETRIEVAL_DOCUMENT")
+
+                    if embedding is not None:
+                        embedding_bytes = embedding.astype(np.float32).tobytes()
+                        # Update embedding
+                        conn.execute("""
+                            UPDATE embeddings SET embedding = ? WHERE memory_id = ?
+                        """, (embedding_bytes, memory_id))
+                    else:
+                        logger.warning(f"Failed to rebuild embedding for memory {memory_id}")
+                        # Use zero vector as placeholder
+                        zero_embedding = np.zeros(self.dimension, dtype=np.float32).tobytes()
+                        conn.execute("""
+                            UPDATE embeddings SET embedding = ? WHERE memory_id = ?
+                        """, (zero_embedding, memory_id))
+
+                    if (i + 1) % 10 == 0:
+                        logger.info(f"Rebuilt {i + 1}/{len(memories)} embeddings")
+
+                conn.commit()
+
+            # Invalidate cache
+            self._invalidate_cache()
             logger.info("Index rebuild complete")
+
+        except Exception as e:
+            logger.error(f"Failed to rebuild index: {e}")
+            raise
