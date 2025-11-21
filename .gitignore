@@ -3,10 +3,16 @@
 *.env
 !.env.template
 
-# Google OAuth
+# Google OAuth and Credentials
 config/client_secret.json
 config/token.json
 config/*.pickle
+*.json
+!package.json
+!tsconfig.json
+!.env.template
+!omi_integration.json
+!railway.json
 
 # Python
 __pycache__/
