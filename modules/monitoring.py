@@ -149,6 +149,10 @@ class MetricsCollector:
             return {
                 'total_requests': 0,
                 'avg_response_time': 0,
+                'median_response_time': 0,
+                'p95_response_time': 0,
+                'min_response_time': 0,
+                'max_response_time': 0,
                 'error_rate': 0,
                 'requests_per_minute': 0
             }

@@ -2,6 +2,7 @@
 Example custom processor plugin
 This demonstrates how to extend the system with custom modality processors
 """
+import logging
 from modules.modality_processor import TextProcessor, ProcessingResult
 from config.settings import AppSettings
 
@@ -9,7 +10,6 @@ from config.settings import AppSettings
 if not logging.getLogger().hasHandlers():
     AppSettings.setup_logging()
 
-import logging
 logger = logging.getLogger(__name__)
 
 class CustomTextProcessor(TextProcessor):
