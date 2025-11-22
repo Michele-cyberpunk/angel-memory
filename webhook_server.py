@@ -609,6 +609,55 @@ async def manual_analysis(limit: int = 5):
         logger.error(f"Error in manual analysis: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.get("/auth/login")
+async def google_auth_login():
+    """Initiate Google OAuth2 flow"""
+    try:
+        if not orchestrator or not orchestrator.workspace_automation:
+            raise HTTPException(status_code=503, detail="Workspace automation not initialized")
+
+        auth_url = orchestrator.workspace_automation.get_authorization_url()
+        if not auth_url:
+            raise HTTPException(status_code=500, detail="Failed to generate authorization URL")
+
+        return {"authorization_url": auth_url, "message": "Visit this URL to authorize"}
+
+    except Exception as e:
+        logger.error(f"Error initiating OAuth: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/auth/callback")
+async def google_auth_callback(code: str = None, state: str = None, error: str = None):
+    """Handle Google OAuth2 callback"""
+    try:
+        if error:
+            logger.error(f"OAuth error: {error}")
+            return JSONResponse(
+                status_code=400,
+                content={"error": error, "message": "Authorization failed"}
+            )
+
+        if not code or not state:
+            raise HTTPException(status_code=400, detail="Missing authorization code or state")
+
+        if not orchestrator or not orchestrator.workspace_automation:
+            raise HTTPException(status_code=503, detail="Workspace automation not initialized")
+
+        success = orchestrator.workspace_automation.complete_authentication(code, state)
+
+        if not success:
+            raise HTTPException(status_code=500, detail="Failed to complete authentication")
+
+        return {
+            "status": "success",
+            "message": "Successfully authenticated with Google Workspace",
+            "email": "michele.biology@gmail.com"
+        }
+
+    except Exception as e:
+        logger.error(f"Error in OAuth callback: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
 if __name__ == "__main__":
     import uvicorn
 

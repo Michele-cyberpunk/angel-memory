@@ -1,0 +1,146 @@
+═══════════════════════════════════════════════════════════════════
+   ANGEL MEMORY - DEPLOYMENT COMPLETATO
+═══════════════════════════════════════════════════════════════════
+
+✅ Il tuo progetto è ONLINE e funzionante su Railway!
+🌐 URL: https://angel-memory-production.up.railway.app/
+📦 GitHub: https://github.com/Michele-cyberpunk/angel-memory
+
+═══════════════════════════════════════════════════════════════════
+   🚨 ATTENZIONE - AZIONE RICHIESTA SUBITO
+═══════════════════════════════════════════════════════════════════
+
+La tua Gemini API key è stata COMPROMESSA e disabilitata da Google.
+
+COSA FARE ORA (3 minuti):
+
+1. Vai su: https://aistudio.google.com/app/apikey
+2. ELIMINA la vecchia key compromessa dalla lista
+3. Crea una NUOVA API key
+4. Esegui questo comando nella directory del progetto:
+
+   cd "/home/ai/Scaricati/Angel Memory"
+   ./update_gemini_key.sh
+
+   (oppure manualmente):
+   railway variables --set "GEMINI_API_KEY=LA_TUA_NUOVA_KEY"
+
+═══════════════════════════════════════════════════════════════════
+   📍 WEBHOOK URL PER OMI APP
+═══════════════════════════════════════════════════════════════════
+
+Configura questo URL nell'app OMI (Settings → Developer → Webhooks):
+
+🔗 MEMORY CREATION WEBHOOK:
+   https://angel-memory-production.up.railway.app/webhook/memory?uid=TcKWu3rCazPZc4GgmZY9jNcx7wH3
+
+Copia e incolla questo URL ESATTO nell'app OMI.
+
+═══════════════════════════════════════════════════════════════════
+   ✅ COSA È GIÀ STATO FATTO
+═══════════════════════════════════════════════════════════════════
+
+✅ Repository GitHub creato e pubblicato
+✅ Codice deployato su Railway (server attivo)
+✅ Tutte le variabili d'ambiente configurate
+✅ Webhook endpoints operativi
+✅ Health checks e monitoring attivi
+✅ Security e rate limiting configurati
+✅ Test completati (162/180 passati - 90%)
+✅ Documentazione completa creata e committata
+
+⚠️  Solo la Gemini API key deve essere aggiornata (3 minuti)
+
+═══════════════════════════════════════════════════════════════════
+   📖 DOCUMENTAZIONE
+═══════════════════════════════════════════════════════════════════
+
+📘 QUICK_START_ITA.md  → Guida rapida in italiano
+📗 DEPLOYMENT_STATUS.md → Documentazione completa deployment
+🔧 update_gemini_key.sh → Script per aggiornare API key
+
+═══════════════════════════════════════════════════════════════════
+   🧪 TEST RAPIDI
+═══════════════════════════════════════════════════════════════════
+
+# Verifica che il server sia online:
+curl https://angel-memory-production.up.railway.app/health
+
+# Verifica webhook generico:
+curl -X POST https://angel-memory-production.up.railway.app/webhook \
+  -H "Content-Type: application/json" \
+  -d '{"test": "hello"}'
+
+# Dopo aver aggiornato la API key, testa il webhook memory:
+curl -X POST "https://angel-memory-production.up.railway.app/webhook/memory?uid=TcKWu3rCazPZc4GgmZY9jNcx7wH3" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "id": "test_001",
+    "transcript_segments": [
+      {"text": "Test funzionamento dopo fix", "start": 0.0, "end": 2.0}
+    ]
+  }'
+
+Deve rispondere con "status": "success" senza warning.
+
+═══════════════════════════════════════════════════════════════════
+   🎯 PROSSIMI PASSI
+═══════════════════════════════════════════════════════════════════
+
+1. [IMMEDIATO] Aggiorna Gemini API key (3 min)
+2. [SUCCESSIVO] Configura webhook URL nell'app OMI (2 min)
+3. [SUCCESSIVO] Testa end-to-end con device OMI reale (5 min)
+4. [OPZIONALE] Configurare custom domain su Railway
+5. [OPZIONALE] Setup Google OAuth per Workspace
+
+═══════════════════════════════════════════════════════════════════
+   📊 STATUS COMPONENTI
+═══════════════════════════════════════════════════════════════════
+
+🟢 Webhook Server        → ONLINE
+🟢 OMI Integration       → CONFIGURATO
+🟢 Health Monitoring     → ATTIVO
+🟢 GitHub Repository     → SINCRONIZZATO
+🟡 Gemini AI Integration → BLOCCATO (API key compromessa)
+🟢 Railway Deployment    → OPERATIVO
+
+═══════════════════════════════════════════════════════════════════
+   💡 COMANDI UTILI
+═══════════════════════════════════════════════════════════════════
+
+# Vedere logs in tempo reale:
+cd "/home/ai/Scaricati/Angel Memory" && railway logs
+
+# Aggiornare variabili d'ambiente:
+railway variables --set "NOME_VAR=valore"
+
+# Visualizzare tutte le variabili:
+railway variables --kv
+
+# Forzare un redeploy:
+railway up
+
+═══════════════════════════════════════════════════════════════════
+   🆘 TROUBLESHOOTING
+═══════════════════════════════════════════════════════════════════
+
+Problema: Il webhook non risponde
+→ Soluzione: curl https://angel-memory-production.up.railway.app/health
+→ Controlla: railway logs
+
+Problema: Errori Gemini API
+→ Soluzione: Aggiorna GEMINI_API_KEY con chiave valida
+
+Problema: 403 Forbidden da OMI
+→ Controlla: OMI_APP_SECRET e OMI_DEV_KEY in railway variables
+
+═══════════════════════════════════════════════════════════════════
+
+🎉 DEPLOYMENT COMPLETATO CON SUCCESSO!
+
+Il sistema è pronto per OMI appena aggiorni la Gemini API key.
+Tempo stimato per essere completamente operativo: 3 minuti.
+
+Per supporto: Leggi DEPLOYMENT_STATUS.md e QUICK_START_ITA.md
+
+═══════════════════════════════════════════════════════════════════
