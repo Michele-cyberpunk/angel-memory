@@ -216,9 +216,9 @@ app.add_middleware(MonitoringMiddleware)
 # Add security middleware
 app.add_middleware(SecurityMiddleware)
 
-# Add HTTPS redirect middleware if enabled
-if SecurityConfig.ENFORCE_HTTPS:
-    app.add_middleware(HTTPSRedirectMiddleware)
+# HTTPS redirect not needed on Railway (already provides HTTPS)
+# if SecurityConfig.ENFORCE_HTTPS:
+#     app.add_middleware(HTTPSRedirectMiddleware)
 
 # Add trusted host middleware for production
 if SecurityConfig.ALLOWED_HOSTS:
