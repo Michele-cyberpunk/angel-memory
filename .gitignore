@@ -1,6 +1,7 @@
 # Environment and Credentials
 .env
 *.env
+.env.backup
 !.env.template
 
 # Google OAuth and Credentials
