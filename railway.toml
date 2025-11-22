@@ -2,7 +2,7 @@
 builder = "NIXPACKS"
 
 [deploy]
-startCommand = "uvicorn webhook_server:app --host 0.0.0.0 --port $PORT"
+startCommand = "python scripts/setup_oauth.py && uvicorn webhook_server:app --host 0.0.0.0 --port $PORT"
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 10
 
@@ -12,7 +12,7 @@ OMI_APP_SECRET = "sk_9c9bc22d4d61a870d5188c84ac7e6640"
 OMI_DEV_KEY = "omi_dev_eb56d79f492d35a0ec46c8ad8735fd4c"
 OMI_BASE_URL = "https://api.omi.me"
 OMI_USER_UID = "TcKWu3rCazPZc4GgmZY9jNcx7wH3"
-GEMINI_API_KEY = "AIzaSyAnmX8MIzQhGgIYGaYQTB54QRZyfb5i0ec"
+GEMINI_API_KEY = "AIzaSyCNek-9SZAEZUYi__owH95dJG4OJV7xeAY"
 GEMINI_PRIMARY_MODEL = "gemini-2.5-pro"
 GEMINI_FALLBACK_MODEL = "gemini-2.5-flash"
 GEMINI_LITE_MODEL = "gemini-2.5-flash-lite"
