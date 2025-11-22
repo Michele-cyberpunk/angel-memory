@@ -306,6 +306,26 @@ async def _validate_webhook_signature(request: Request):
         return body
     return None
 
+@app.post("/webhook")
+async def generic_webhook(request: Request):
+    """
+    Generic Webhook Handler
+    Logs the request body for debugging/testing purposes.
+    """
+    try:
+        body = await request.json()
+        logger.info(f"Received generic webhook: {json.dumps(body, indent=2)}")
+        return {"status": "received", "body": body}
+    except Exception as e:
+        logger.error(f"Error processing generic webhook: {e}")
+        # Try to read as text if JSON fails
+        try:
+            body = await request.body()
+            logger.info(f"Received generic webhook (text): {body.decode()}")
+            return {"status": "received", "body": body.decode()}
+        except Exception as inner_e:
+             return JSONResponse(status_code=400, content={"error": str(e)})
+
 @app.post("/webhook/memory")
 async def memory_creation_webhook(request: Request):
     """
