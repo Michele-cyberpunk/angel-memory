@@ -609,6 +609,38 @@ async def manual_analysis(limit: int = 5):
         logger.error(f"Error in manual analysis: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.get("/debug/oauth")
+async def debug_oauth():
+    """Debug OAuth configuration"""
+    import os
+    from pathlib import Path
+
+    config_dir = Path("config")
+    client_secret_file = config_dir / "client_secret.json"
+
+    debug_info = {
+        "config_dir_exists": config_dir.exists(),
+        "client_secret_exists": client_secret_file.exists(),
+        "env_vars": {
+            "GOOGLE_CLIENT_ID": os.getenv("GOOGLE_CLIENT_ID", "NOT_SET")[:20] + "...",
+            "GOOGLE_CLIENT_SECRET": "SET" if os.getenv("GOOGLE_CLIENT_SECRET") else "NOT_SET",
+            "GOOGLE_REDIRECT_URI": os.getenv("GOOGLE_REDIRECT_URI", "NOT_SET"),
+        },
+        "orchestrator_exists": orchestrator is not None,
+        "workspace_automation_exists": orchestrator.workspace_automation is not None if orchestrator else False
+    }
+
+    if client_secret_file.exists():
+        try:
+            with open(client_secret_file, 'r') as f:
+                import json
+                content = json.load(f)
+                debug_info["client_secret_type"] = list(content.keys())[0] if content else "empty"
+        except Exception as e:
+            debug_info["client_secret_error"] = str(e)
+
+    return debug_info
+
 @app.get("/auth/login")
 async def google_auth_login():
     """Initiate Google OAuth2 flow"""
