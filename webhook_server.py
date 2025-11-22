@@ -220,12 +220,12 @@ app.add_middleware(SecurityMiddleware)
 # if SecurityConfig.ENFORCE_HTTPS:
 #     app.add_middleware(HTTPSRedirectMiddleware)
 
-# Add trusted host middleware for production
-if SecurityConfig.ALLOWED_HOSTS:
-    app.add_middleware(
-        TrustedHostMiddleware,
-        allowed_hosts=SecurityConfig.ALLOWED_HOSTS
-    )
+# TrustedHostMiddleware disabled for Railway (causes redirect loops)
+# if SecurityConfig.ALLOWED_HOSTS:
+#     app.add_middleware(
+#         TrustedHostMiddleware,
+#         allowed_hosts=SecurityConfig.ALLOWED_HOSTS
+#     )
 
 @app.get("/")
 async def root():
