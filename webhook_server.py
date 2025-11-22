@@ -10,6 +10,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from contextlib import asynccontextmanager
 import logging
 import sys
+import json
 from datetime import datetime
 import re
 from typing import Optional
@@ -338,7 +339,6 @@ async def memory_creation_webhook(request: Request):
         # Parse memory data (use validated body if available)
         try:
             if validated_body:
-                import json
                 memory_data = json.loads(validated_body)
             else:
                 memory_data = await request.json()
@@ -462,7 +462,6 @@ async def realtime_transcript_webhook(request: Request):
         # Parse segments (use validated body if available)
         try:
             if validated_body:
-                import json
                 segments = json.loads(validated_body)
             else:
                 segments = await request.json()
