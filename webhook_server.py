@@ -314,8 +314,8 @@ async def generic_webhook(request: Request):
     """
     try:
         body = await request.json()
-        logger.info(f"Received generic webhook: {json.dumps(body, indent=2)}")
-        return {"status": "received", "body": body}
+        logger.info(f"Received generic webhook (v1.1): {json.dumps(body, indent=2)}")
+        return {"status": "received", "version": "1.1", "body": body}
     except Exception as e:
         logger.error(f"Error processing generic webhook: {e}")
         # Try to read as text if JSON fails
