@@ -16,7 +16,8 @@ from .psychological_analyzer import PsychologicalAnalyzer
 from .workspace_automation import WorkspaceAutomation
 from .omi_client import OMIClient
 from .security import InputValidator
-from .modality_processor import ProcessorRegistry, ModalityType
+from .modality_processor import ModalityType
+from .processor_registry import ProcessorRegistry
 from .concrete_processors import (
     create_text_processor, create_audio_processor, create_image_processor
 )
