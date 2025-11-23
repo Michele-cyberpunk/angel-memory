@@ -103,14 +103,15 @@ class WorkspaceAutomation:
 
             flow = InstalledAppFlow.from_client_secrets_file(
                 client_secret_file,
-                scopes=scopes,
-                redirect_uri=redirect_uri
+                scopes=scopes
             )
+
+            # Set redirect_uri for web client type
+            flow.redirect_uri = redirect_uri
 
             auth_url, state = flow.authorization_url(
                 access_type='offline',
-                include_granted_scopes='true',
-                redirect_uri=redirect_uri
+                include_granted_scopes='true'
             )
 
             # Store flow state for later use
