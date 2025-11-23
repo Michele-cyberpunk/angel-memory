@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """
-Generate client_secret.json from environment variables
+Generate client_secret.json and token.json from environment variables
 Run this on Railway startup to configure OAuth
 """
 import os
 import json
+import base64
 from pathlib import Path
 
 def setup_oauth_credentials():
@@ -46,6 +47,38 @@ def setup_oauth_credentials():
     print(f"✅ Generated {client_secret_file}")
     return True
 
+def setup_oauth_token():
+    """Decode and write token.json from base64 environment variable"""
+
+    token_b64 = os.getenv("GOOGLE_TOKEN_B64")
+
+    if not token_b64:
+        print("⚠️  GOOGLE_TOKEN_B64 not set, skipping token setup")
+        return False
+
+    try:
+        # Decode base64 token
+        token_data = base64.b64decode(token_b64)
+
+        # Ensure config directory exists
+        config_dir = Path(__file__).parent.parent / "config"
+        config_dir.mkdir(exist_ok=True)
+
+        # Write token.json (binary pickle file)
+        token_file = config_dir / "token.json"
+        with open(token_file, 'wb') as f:
+            f.write(token_data)
+
+        print(f"✅ Generated {token_file}")
+        return True
+
+    except Exception as e:
+        print(f"❌ Failed to decode token: {e}")
+        return False
+
 if __name__ == "__main__":
-    success = setup_oauth_credentials()
-    exit(0 if success else 1)
+    creds_success = setup_oauth_credentials()
+    token_success = setup_oauth_token()
+
+    # Exit 0 if at least client_secret was created
+    exit(0 if creds_success else 1)
