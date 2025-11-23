@@ -107,6 +107,11 @@ class OMIGeminiOrchestrator:
 
         try:
             self.workspace_automation = WorkspaceAutomation()
+            # Attempt to authenticate with Google Workspace
+            if self.workspace_automation.authenticate():
+                logger.info("Google Workspace authenticated successfully")
+            else:
+                logger.warning("Google Workspace authentication skipped (no valid token)")
             logger.debug("Workspace automation initialized")
         except Exception as e:
             logger.error("Failed to initialize workspace automation", exc_info=True, extra={
