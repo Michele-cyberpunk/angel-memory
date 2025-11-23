@@ -617,18 +617,24 @@ async def debug_oauth():
 
     config_dir = Path("config")
     client_secret_file = config_dir / "client_secret.json"
+    token_file = config_dir / "token.json"
 
     debug_info = {
         "config_dir_exists": config_dir.exists(),
         "client_secret_exists": client_secret_file.exists(),
+        "token_exists": token_file.exists(),
         "env_vars": {
             "GOOGLE_CLIENT_ID": os.getenv("GOOGLE_CLIENT_ID", "NOT_SET")[:20] + "...",
             "GOOGLE_CLIENT_SECRET": "SET" if os.getenv("GOOGLE_CLIENT_SECRET") else "NOT_SET",
             "GOOGLE_REDIRECT_URI": os.getenv("GOOGLE_REDIRECT_URI", "NOT_SET"),
         },
         "orchestrator_exists": orchestrator is not None,
-        "workspace_automation_exists": orchestrator.workspace_automation is not None if orchestrator else False
+        "workspace_automation_exists": orchestrator.workspace_automation is not None if orchestrator else False,
+        "has_credentials": False
     }
+
+    if orchestrator and orchestrator.workspace_automation:
+        debug_info["has_credentials"] = orchestrator.workspace_automation.credentials is not None
 
     if client_secret_file.exists():
         try:
