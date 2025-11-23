@@ -651,11 +651,17 @@ async def debug_oauth():
 async def google_auth_login():
     """Initiate Google OAuth2 flow"""
     try:
+        logger.info("OAuth login endpoint called")
         if not orchestrator or not orchestrator.workspace_automation:
+            logger.error("Orchestrator or workspace_automation not initialized")
             raise HTTPException(status_code=503, detail="Workspace automation not initialized")
 
+        logger.info("Calling get_authorization_url()")
         auth_url = orchestrator.workspace_automation.get_authorization_url()
+        logger.info(f"Authorization URL: {auth_url is not None}")
+
         if not auth_url:
+            logger.error("get_authorization_url() returned None")
             raise HTTPException(status_code=500, detail="Failed to generate authorization URL")
 
         return {"authorization_url": auth_url, "message": "Visit this URL to authorize"}
