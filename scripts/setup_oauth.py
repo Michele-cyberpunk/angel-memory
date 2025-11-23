@@ -56,24 +56,31 @@ def setup_oauth_token():
         print("⚠️  GOOGLE_TOKEN_B64 not set, skipping token setup")
         return False
 
+    print(f"📝 GOOGLE_TOKEN_B64 length: {len(token_b64)} chars")
+
     try:
         # Decode base64 token
+        print("🔄 Decoding base64 token...")
         token_data = base64.b64decode(token_b64)
+        print(f"✅ Decoded {len(token_data)} bytes")
 
         # Ensure config directory exists
         config_dir = Path(__file__).parent.parent / "config"
         config_dir.mkdir(exist_ok=True)
+        print(f"📁 Config directory: {config_dir}")
 
         # Write token.json (binary pickle file)
         token_file = config_dir / "token.json"
         with open(token_file, 'wb') as f:
             f.write(token_data)
 
-        print(f"✅ Generated {token_file}")
+        print(f"✅ Generated {token_file} ({len(token_data)} bytes)")
         return True
 
     except Exception as e:
         print(f"❌ Failed to decode token: {e}")
+        import traceback
+        traceback.print_exc()
         return False
 
 if __name__ == "__main__":
