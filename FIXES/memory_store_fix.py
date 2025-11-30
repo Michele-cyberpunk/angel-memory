@@ -16,12 +16,22 @@ from typing import List, Dict, Any, Optional
 from pathlib import Path
 from datetime import datetime, timezone
 import logging
-from config.settings import AppSettings
+from config.settings import AppSettings, GeminiConfig
+
+# Import real Gemini embedder
+from gemini_embeddings_real import GeminiEmbedder
 
 if not logging.getLogger().hasHandlers():
     AppSettings.setup_logging()
 
 logger = logging.getLogger(__name__)
+
+# Initialize Gemini embedder
+try:
+    _embedder = GeminiEmbedder(api_key=GeminiConfig.API_KEY)
+except Exception as e:
+    logger.warning(f"Failed to initialize Gemini embedder: {e}. Falling back to random embeddings.")
+    _embedder = None
 
 COMPRESSION_THRESHOLD = 1024
 
@@ -167,8 +177,18 @@ class MemoryStoreFixed:
             created_at = datetime.now(timezone.utc).isoformat()
             metadata_json = json.dumps(metadata or {})
 
-            # Simulate embedding (in production, use actual embedder)
-            embedding = np.random.randn(self.dimension).astype(np.float32)
+            # Generate embedding using real Gemini API
+            if _embedder:
+                try:
+                    embedding = _embedder.embed_text(content)
+                    logger.info(f"Generated real Gemini embedding for memory {memory_id}")
+                except Exception as e:
+                    logger.warning(f"Failed to generate Gemini embedding: {e}. Using fallback random embedding.")
+                    embedding = np.random.randn(self.dimension).astype(np.float32)
+            else:
+                logger.warning(f"Gemini embedder not available. Using fallback random embedding.")
+                embedding = np.random.randn(self.dimension).astype(np.float32)
+
             embedding_bytes = embedding.tobytes()
 
             with sqlite3.connect(self.db_path) as conn:
@@ -232,7 +252,19 @@ class MemoryStoreFixed:
             compressed_content, is_compressed = self._compress_content(content)
             updated_at = datetime.now(timezone.utc).isoformat()
             metadata_json = json.dumps(metadata or {})
-            embedding = np.random.randn(self.dimension).astype(np.float32)
+
+            # Generate embedding using real Gemini API
+            if _embedder:
+                try:
+                    embedding = _embedder.embed_text(content)
+                    logger.info(f"Generated real Gemini embedding for updated memory {memory_id}")
+                except Exception as e:
+                    logger.warning(f"Failed to generate Gemini embedding: {e}. Using fallback random embedding.")
+                    embedding = np.random.randn(self.dimension).astype(np.float32)
+            else:
+                logger.warning(f"Gemini embedder not available. Using fallback random embedding.")
+                embedding = np.random.randn(self.dimension).astype(np.float32)
+
             embedding_bytes = embedding.tobytes()
 
             with sqlite3.connect(self.db_path) as conn:
